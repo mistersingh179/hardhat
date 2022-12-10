@@ -655,6 +655,14 @@ const communityPlugins: IPlugin[] = [
       "Hardhat plugin to automate the deployment and verification of contracts",
     tags: ["Deployment", "Verification", "Migration"],
   },
+  {
+    name: "@dlsl/hardhat-notifier",
+    author: "Mister Singh",
+    authorUrl: "https://github.com/mistersingh179/hardhat-notifier",
+    description:
+      "Hardhat plugin to generate an OSX notification when compilation fails/succeeds.",
+    tags: ["Deployment", "Tooling", "compile", "notification"],
+  },
 ];
 
 const officialPlugins: IPlugin[] = [
