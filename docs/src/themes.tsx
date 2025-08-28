@@ -219,13 +219,47 @@ export const ThemeProvider = ({
 }: React.PropsWithChildren<{}>): JSX.Element => {
   const [theme, setTheme] = useState<ThemesEnum>(ThemesEnum.AUTO);
 
+  const THEME_CLASSES = useMemo(
+    () => [ThemesEnum.LIGHT, ThemesEnum.DARK, ThemesEnum.AUTO],
+    []
+  );
+
+  const applyThemeToDOM = useCallback((t: ThemesEnum) => {
+    try {
+      const body = document.body;
+      body.classList.remove(...THEME_CLASSES);
+      body.classList.add(t);
+      const mql = window.matchMedia("(prefers-color-scheme: dark)");
+      const isDark =
+        t === ThemesEnum.DARK || (t === ThemesEnum.AUTO && mql.matches);
+      // Manage an override theme-color meta when a forced theme is selected.
+      const overrideSelector = 'meta[name="theme-color"][data-managed-by="theme"]';
+      let overrideMeta = document.querySelector(overrideSelector);
+      if (t === ThemesEnum.AUTO) {
+        if (overrideMeta) overrideMeta.remove();
+      } else {
+        if (!overrideMeta) {
+          overrideMeta = document.createElement("meta");
+          overrideMeta.setAttribute("name", "theme-color");
+          overrideMeta.setAttribute("data-managed-by", "theme");
+          document.head.appendChild(overrideMeta);
+        }
+        overrideMeta.setAttribute("content", isDark ? "#181A1F" : "#ffffff");
+      }
+      // Align native UI via CSS color-scheme hint
+      (document.documentElement as HTMLElement).style.colorScheme =
+        t === ThemesEnum.AUTO ? (mql.matches ? "dark" : "light") : isDark ? "dark" : "light";
+    } catch {
+      // no-op: DOM may not be available in some environments
+    }
+  }, [THEME_CLASSES]);
+
   const changeTheme = useCallback(() => {
-    const body = document.querySelector("body") as Element;
     const newTheme = ThemesEnum[getNextTheme(theme)];
-    body.className = newTheme;
+    applyThemeToDOM(newTheme);
     localStorage.setItem("theme", newTheme);
     setTheme(newTheme);
-  }, [theme, setTheme]);
+  }, [theme, setTheme, applyThemeToDOM]);
 
   const initialContext = useMemo(
     () => ({ theme, changeTheme }),
@@ -233,10 +267,37 @@ export const ThemeProvider = ({
   );
 
   useEffect(() => {
-    const savedTheme =
-      (localStorage.getItem("theme") as ThemesEnum) || ThemesEnum.AUTO;
+    const raw = localStorage.getItem("theme");
+    const savedTheme: ThemesEnum =
+      raw === ThemesEnum.LIGHT || raw === ThemesEnum.DARK || raw === ThemesEnum.AUTO
+        ? (raw as ThemesEnum)
+        : ThemesEnum.AUTO;
+    applyThemeToDOM(savedTheme);
     setTheme(savedTheme);
-  }, []);
+  }, [applyThemeToDOM]);
+
+  // When in AUTO, keep theme-color meta in sync with OS changes
+  useEffect(() => {
+    if (theme !== ThemesEnum.AUTO) return;
+    const mql = window.matchMedia("(prefers-color-scheme: dark)");
+    const onChange = () => applyThemeToDOM(ThemesEnum.AUTO);
+    try {
+      if (typeof mql.addEventListener === "function") {
+        mql.addEventListener("change", onChange);
+      } else if (typeof mql.addListener === "function") {
+        mql.addListener(onChange);
+      }
+    } catch {}
+    return () => {
+      try {
+        if (typeof mql.removeEventListener === "function") {
+          mql.removeEventListener("change", onChange);
+        } else if (typeof mql.removeListener === "function") {
+          mql.removeListener(onChange);
+        }
+      } catch {}
+    };
+  }, [theme, applyThemeToDOM]);
 
   return (
     <ThemeContext.Provider value={initialContext}>
